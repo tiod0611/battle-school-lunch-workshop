@@ -13,6 +13,16 @@ services:
       - TOURNAMENT_RUN_MINUTE=${TOURNAMENT_RUN_MINUTE:-10}
     restart: unless-stopped
 
+  mcp:
+    build: ./src/mcp
+    ports:
+      - "8100:8100"
+    environment:
+      - NEIS_API_KEY=${NEIS_API_KEY}
+      - MCP_HOST=${MCP_HOST:-0.0.0.0}
+      - MCP_PORT=${MCP_PORT:-8100}
+    restart: unless-stopped
+
   frontend:
     build: ./frontend
     ports:
