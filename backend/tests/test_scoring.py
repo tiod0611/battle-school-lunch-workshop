@@ -5,7 +5,9 @@ def test_seasonal_ingredient_scores():
     assert scoring.score_seasonal_ingredients(["불고기"], "20260401") == 0
     assert scoring.score_seasonal_ingredients(["딸기샐러드"], "20260401") == 10
     assert scoring.score_seasonal_ingredients(["딸기샐러드", "냉이국"], "20260401") == 18
-    assert scoring.score_seasonal_ingredients(["딸기샐러드", "냉이국", "두릅무침"], "20260401") == 25
+    assert (
+        scoring.score_seasonal_ingredients(["딸기샐러드", "냉이국", "두릅무침"], "20260401") == 25
+    )
 
 
 def test_nutrition_balance_scores():

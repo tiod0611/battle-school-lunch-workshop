@@ -23,7 +23,9 @@ def test_school_search_success(monkeypatch):
 
     monkeypatch.setattr(schools.neis_client, "search_schools", fake_search_schools)
     with TestClient(app) as client:
-        response = client.get("/api/schools/search", params={"keyword": "서울", "page": 1, "limit": 30})
+        response = client.get(
+            "/api/schools/search", params={"keyword": "서울", "page": 1, "limit": 30}
+        )
     assert response.status_code == 200
     body = response.json()
     assert body["limit"] == 20

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
-import re
 
 from app.schemas import ScoreBreakdown
 
@@ -13,7 +13,20 @@ SEASONAL_KEYWORDS = {
     "autumn": ["사과", "배", "감", "밤", "고구마", "버섯", "전어", "갈치", "단호박"],
     "winter": ["귤", "굴", "시금치", "배추", "무", "호박", "방어", "대구", "냉이"],
 }
-PROCESSED_FOOD_KEYWORDS = ["소시지", "햄", "베이컨", "스팸", "맛살", "어묵", "통조림", "냉동", "즉석", "라면", "핫도그", "너겟"]
+PROCESSED_FOOD_KEYWORDS = [
+    "소시지",
+    "햄",
+    "베이컨",
+    "스팸",
+    "맛살",
+    "어묵",
+    "통조림",
+    "냉동",
+    "즉석",
+    "라면",
+    "핫도그",
+    "너겟",
+]
 NUTRITION_TARGETS = {"carb": 60.0, "protein": 13.5, "fat": 22.5}
 NUTRITION_RANGES = {"carb": (55.0, 65.0), "protein": (7.0, 20.0), "fat": (15.0, 30.0)}
 DAY_OF_WEEK = ["월", "화", "수", "목", "금", "토", "일"]
@@ -148,7 +161,10 @@ def calculate_meal_score(meal_row: dict) -> ScoreResult:
     nutrition_score, ratios, nutrition_distance = score_nutrition_balance(meal_row.get("NTR_INFO"))
     menu_variety, menu_count = score_menu_variety(menu_items)
     processed_penalty = score_processed_food_penalty(menu_items)
-    total = max(0, min(100, BASE_SCORE + seasonal_score + nutrition_score + menu_variety + processed_penalty))
+    total = max(
+        0,
+        min(100, BASE_SCORE + seasonal_score + nutrition_score + menu_variety + processed_penalty),
+    )
     breakdown = ScoreBreakdown(
         base=BASE_SCORE,
         seasonalIngredient=seasonal_score,

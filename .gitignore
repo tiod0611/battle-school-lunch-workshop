@@ -101,3 +101,7 @@ $RECYCLE.BIN/
 .directory
 .Trash-*
 .nfs*
+
+# Bicep 컴파일 산출물 (az bicep build로 재생성 가능)
+infra/*.json
+!infra/main.parameters.json

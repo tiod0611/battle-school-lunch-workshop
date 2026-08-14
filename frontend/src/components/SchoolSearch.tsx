@@ -1,47 +1,49 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useState } from "react";
 
-import { searchSchools, type SchoolSummary } from '../api/client'
+import { searchSchools, type SchoolSummary } from "../api/client";
 
 interface SchoolSearchProps {
-  selectedSchool: SchoolSummary | null
-  onSelectSchool: (school: SchoolSummary) => void
+  selectedSchool: SchoolSummary | null;
+  onSelectSchool: (school: SchoolSummary) => void;
 }
 
 function SchoolSearch({ selectedSchool, onSelectSchool }: SchoolSearchProps) {
-  const [keyword, setKeyword] = useState('')
-  const [results, setResults] = useState<SchoolSummary[]>([])
-  const [page, setPage] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [searched, setSearched] = useState(false)
+  const [keyword, setKeyword] = useState("");
+  const [results, setResults] = useState<SchoolSummary[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searched, setSearched] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+    event.preventDefault();
 
-    const trimmed = keyword.trim()
+    const trimmed = keyword.trim();
 
     if (!trimmed) {
-      setError('학교명을 1글자 이상 입력해 주세요.')
-      setResults([])
-      setSearched(false)
-      return
+      setError("학교명을 1글자 이상 입력해 주세요.");
+      setResults([]);
+      setSearched(false);
+      return;
     }
 
     try {
-      setLoading(true)
-      setError(null)
-      const response = await searchSchools(trimmed, 1, 20)
-      setResults(response.items)
-      setPage(response.page)
-      setTotalCount(response.totalCount)
-      setSearched(true)
+      setLoading(true);
+      setError(null);
+      const response = await searchSchools(trimmed, 1, 20);
+      setResults(response.items);
+      setPage(response.page);
+      setTotalCount(response.totalCount);
+      setSearched(true);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '학교 검색에 실패했습니다.')
-      setResults([])
-      setSearched(true)
+      setError(
+        caught instanceof Error ? caught.message : "학교 검색에 실패했습니다.",
+      );
+      setResults([]);
+      setSearched(true);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -58,7 +60,7 @@ function SchoolSearch({ selectedSchool, onSelectSchool }: SchoolSearchProps) {
           onChange={(event) => setKeyword(event.target.value)}
         />
         <button type="submit" disabled={loading}>
-          {loading ? '검색중...' : '검 색'}
+          {loading ? "검색중..." : "검 색"}
         </button>
       </form>
 
@@ -74,29 +76,30 @@ function SchoolSearch({ selectedSchool, onSelectSchool }: SchoolSearchProps) {
           </p>
           <ul className="school-list" aria-label="학교 검색 결과">
             {results.map((school) => {
-              const isSelected = selectedSchool?.schoolCode === school.schoolCode
+              const isSelected =
+                selectedSchool?.schoolCode === school.schoolCode;
 
               return (
                 <li key={`${school.schoolCode}-${school.officeCode}`}>
                   <button
                     type="button"
-                    className={`school-item ${isSelected ? 'selected' : ''}`}
+                    className={`school-item ${isSelected ? "selected" : ""}`}
                     onClick={() => onSelectSchool(school)}
                   >
                     <strong>{school.schoolName}</strong>
                     <span>
                       {school.officeName} · {school.schoolKind}
-                      {school.region ? ` · ${school.region}` : ''}
+                      {school.region ? ` · ${school.region}` : ""}
                     </span>
                   </button>
                 </li>
-              )
+              );
             })}
           </ul>
         </div>
       ) : null}
     </section>
-  )
+  );
 }
 
-export default SchoolSearch
+export default SchoolSearch;

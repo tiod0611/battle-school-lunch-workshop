@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from datetime import date
-import time
+from typing import Any
 
 import httpx
 
@@ -46,33 +47,46 @@ def _extract_payload(payload: dict, root_key: str) -> tuple[list[dict], int]:
         return [], 0
     if code not in SUCCESS_CODES:
         raise NeisApiError(code, message)
-    rows = next((entry.get("row", []) for entry in data if "row" in entry), [])
+    rows: list[dict] = next((entry.get("row", []) for entry in data if "row" in entry), [])
     return rows, total_count
 
 
-def _request(path: str, params: dict, root_key: str, client_factory: Callable[[], httpx.Client] | None = None) -> tuple[list[dict], int]:
-    client_factory = client_factory or (lambda: httpx.Client(base_url=BASE_URL, timeout=DEFAULT_TIMEOUT))
+def _request(
+    path: str, params: dict, root_key: str, client_factory: Callable[[], httpx.Client] | None = None
+) -> tuple[list[dict], int]:
+    client_factory = client_factory or (
+        lambda: httpx.Client(base_url=BASE_URL, timeout=DEFAULT_TIMEOUT)
+    )
     attempts = len(RETRY_BACKOFFS) + 1
     for attempt in range(attempts):
         try:
             with client_factory() as client:
-                response = client.get(path, params={"KEY": settings.neis_api_key, "Type": "json", **params})
+                response = client.get(
+                    path, params={"KEY": settings.neis_api_key, "Type": "json", **params}
+                )
                 if response.status_code >= 500:
-                    raise httpx.HTTPStatusError("NEIS server error", request=response.request, response=response)
+                    raise httpx.HTTPStatusError(
+                        "NEIS server error", request=response.request, response=response
+                    )
                 response.raise_for_status()
                 return _extract_payload(response.json(), root_key)
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
             retryable = isinstance(exc, (httpx.TimeoutException, httpx.NetworkError)) or (
-                isinstance(exc, httpx.HTTPStatusError) and exc.response is not None and exc.response.status_code >= 500
+                isinstance(exc, httpx.HTTPStatusError)
+                and exc.response is not None
+                and exc.response.status_code >= 500
             )
             if retryable and attempt < len(RETRY_BACKOFFS):
                 time.sleep(RETRY_BACKOFFS[attempt])
                 continue
             raise NeisApiError("NEIS_UPSTREAM_ERROR", "NEIS API 호출에 실패했습니다.") from exc
+    raise NeisApiError("NEIS_UPSTREAM_ERROR", "NEIS API 호출에 실패했습니다.")
 
 
-def search_schools(office_code: str | None, school_name: str | None, page: int, size: int) -> tuple[list[dict], int]:
-    params = {"pIndex": page, "pSize": size}
+def search_schools(
+    office_code: str | None, school_name: str | None, page: int, size: int
+) -> tuple[list[dict], int]:
+    params: dict[str, Any] = {"pIndex": page, "pSize": size}
     if office_code:
         params["ATPT_OFCDC_SC_CODE"] = office_code
     if school_name:

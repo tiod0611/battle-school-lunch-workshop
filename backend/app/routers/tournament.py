@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/tournament", tags=["tournament"])
 
 
 @router.get("/today", response_model=TodayKingResponse, responses={404: {"model": ErrorResponse}})
-def get_today_tournament(db: Session = Depends(get_db)) -> TodayKingResponse:
+def get_today_tournament(db: Session = Depends(get_db)) -> TodayKingResponse | JSONResponse:
     today = date.today()
     tournament_run = db.query(TournamentRun).filter(TournamentRun.run_date == today).one_or_none()
     if tournament_run is None:

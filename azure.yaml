@@ -1,0 +1,43 @@
+# azd(Azure Developer CLI) 서비스 정의
+# 사용법: azd auth login → azd env new <env-name> → azd env set NEIS_API_KEY <key> → azd up
+name: school-lunch-battle
+metadata:
+  template: school-lunch-battle@0.1.0
+
+infra:
+  provider: bicep
+  path: infra
+
+services:
+  backend:
+    project: ./backend
+    host: containerapp
+    language: python
+    docker:
+      path: ./Dockerfile
+      context: .
+      # 로컬/CI 러너에 Docker가 없어도 Azure Container Registry Tasks로 원격 빌드한다.
+      remoteBuild: true
+
+  mcp:
+    project: ./src/mcp
+    host: containerapp
+    language: python
+    docker:
+      path: ./Dockerfile
+      context: .
+      remoteBuild: true
+
+  frontend:
+    project: ./frontend
+    host: containerapp
+    language: js
+    docker:
+      path: ./Dockerfile
+      context: .
+      remoteBuild: true
+      # Vite는 빌드 타임에 VITE_API_BASE_URL을 번들에 굽기 때문에, azd provision 단계의
+      # Bicep 출력값(BACKEND_URI)을 build arg로 그대로 전달해 브라우저가 실제 백엔드
+      # Container App 주소를 호출하도록 한다.
+      buildArgs:
+        - VITE_API_BASE_URL=${BACKEND_URI}

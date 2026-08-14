@@ -15,7 +15,8 @@
   직접 호출하지 않음
 - **MCP 서버**(`src/mcp/`): 학교 검색/급식 조회 도구를 제공하는 독립 실행형 Model Context
   Protocol 서버 (Streamable HTTP, backend 비의존)
-- **배포**: GitHub Actions CI(`.github/workflows/ci.yml`), Docker Compose로 3개 서비스
+- **배포**: GitHub Actions CI/CD(`.github/workflows/ci.yml`, frontend/backend/compose 통과 후
+  Azure Container Apps로 `azd` 자동 배포), 로컬은 Docker Compose로 3개 서비스
   (backend:8000, mcp:8100, frontend:3000) 동시 실행
 
 ### 저장소 구조
@@ -42,7 +43,9 @@ frontend/                 # React + TypeScript + Vite
     components/            # SchoolSearch, DateRangePicker, MealResults, TodayKing 등
     test/setup.ts           # vitest + MSW 셋업
 scripts/                  # run-dev.ps1/.sh, convert_excel*.py/.ps1, generate_openapi.ps1
-docker-compose.yml        # backend + mcp + frontend
+docker-compose.yml        # backend + mcp + frontend (로컬)
+azure.yaml                # azd 서비스 정의 (backend/mcp/frontend → Azure Container Apps)
+infra/                    # Bicep 인프라 (main.bicep: 구독 스코프, resources.bicep: 실제 리소스)
 ```
 
 ## 일반 작업 지침
@@ -97,14 +100,13 @@ docker-compose.yml        # backend + mcp + frontend
 - **전송 방식**: Streamable HTTP (`streamable_http_path="/mcp"`), backend와 완전히 독립 실행
 - **기타**: httpx, pydantic-settings, 테스트는 pytest + respx
 
-### ⚠️ CONTRIBUTING.md / CI와의 알려진 불일치
+### ✅ CONTRIBUTING.md / CI 정합화 완료 (이슈 #7)
 
-`CONTRIBUTING.md`와 `.github/workflows/ci.yml`은 `backend/pyproject.toml`이 존재하고
-`pip install -e ".[dev]"`로 설치한다고 가정하지만, 실제 `backend/`와 `src/mcp/`는
-`requirements.txt`만 사용합니다. 그 결과 CI의 backend 잡은 `pyproject.toml` 부재 조건으로
-**현재 실질적으로 스킵**되고 있고, `src/mcp/`는 CI에 아예 잡이 없습니다. 이 문서의 명령은
-실제로 동작하는 `requirements.txt` 기준으로 작성했으니 이 명령을 따르세요. CI/CONTRIBUTING.md
-정합화는 별도 이슈로 다루는 것을 권장합니다.
+과거 `CONTRIBUTING.md`와 `.github/workflows/ci.yml`은 `backend/pyproject.toml`이 존재한다고
+가정했지만 실제로는 없어 backend CI 잡이 스킵되던 불일치가 있었습니다. 이제
+`backend/pyproject.toml`을 추가해 `pip install -e ".[dev]"`(ruff, mypy, pytest 포함)가 실제로
+동작하며, CI도 이 경로를 그대로 사용합니다. `src/mcp/`는 여전히 `requirements.txt`만 사용하고
+CI 잡도 없습니다(이 이슈의 범위는 frontend/backend로 한정).
 
 ## 검증된 명령
 
@@ -113,10 +115,12 @@ docker-compose.yml        # backend + mcp + frontend
 ```bash
 cd frontend
 npm install
-npm run dev          # 로컬 개발 서버 (:3000)
-npm run build         # tsc -b && vite build (타입 검사 포함)
-npm test              # vitest run
-npm run lint           # oxlint
+npm run dev            # 로컬 개발 서버 (:3000)
+npm run format:check    # prettier --check
+npm run lint            # oxlint
+npm run typecheck       # tsc -b
+npm test                # vitest run
+npm run build           # tsc -b && vite build
 ```
 
 ### 백엔드
@@ -124,10 +128,16 @@ npm run lint           # oxlint
 ```bash
 cd backend
 python -m venv .venv   # 활성화 후 진행
-pip install -r requirements.txt
+python -m pip install -e ".[dev]"   # runtime + ruff/mypy/pytest 등 dev 도구
 python -m uvicorn app.main:app --reload --port 8000   # 로컬 개발 서버
-pytest                                                   # 단위 + 통합 테스트
+ruff format --check .                                   # 포맷 검사
+ruff check .                                             # 린트
+mypy app                                                 # 타입 검사
+pytest                                                    # 단위 + 통합 테스트
 ```
+
+`requirements.txt`는 Docker 이미지 빌드용(런타임 의존성만)으로 계속 유지되므로,
+`pyproject.toml`의 `dependencies`와 수동으로 동기화해야 합니다.
 
 ### MCP 서버
 
@@ -538,19 +548,54 @@ Closes #5, #6
 
 ### 실제 워크플로 (`.github/workflows/ci.yml`)
 
-`main`으로의 push와 PR마다 3개 잡이 실행됩니다:
+`main`으로의 push, PR, 수동 실행(`workflow_dispatch`)마다 아래 잡이 실행됩니다:
 
-1. **frontend** (`frontend/package-lock.json`이 있을 때만): `npm ci` → `npm run build`
-   (tsc 타입 검사 포함) → `npm test`
-2. **backend** (`backend/pyproject.toml`이 있을 때만): `pip install -e ".[dev]"` → `pytest`
-   — ⚠️ 현재 `backend/`는 `pyproject.toml`이 아니라 `requirements.txt`를 사용하므로 이
-   조건이 거짓이 되어 **이 잡은 사실상 스킵됩니다**. `src/mcp/`용 CI 잡은 아직 없습니다.
-   CI에서 backend·mcp 테스트를 실제로 돌리려면 워크플로 정합화가 필요합니다(별도 이슈 권장).
-3. **compose** (compose 파일이 있을 때만): `docker compose config`로 **문법만** 검증하며
-   실제 이미지 빌드는 하지 않습니다.
+1. **frontend**: `npm ci` → `prettier --check`(포맷) → `oxlint`(린트) → `tsc -b`(타입 검사)
+   → `vitest run`(테스트) → `vite build`(빌드)
+2. **backend**: `pip install -e ".[dev]"` → `ruff format --check`(포맷) → `ruff check`(린트)
+   → `mypy app`(타입 검사) → `pytest`(테스트)
+3. **compose**: `docker compose config`로 Compose 파일 문법 검증 (실제 이미지 빌드 아님)
+4. **deploy**: 위 3개 잡이 모두 성공하고 `main` push 또는 수동 실행일 때만 실행. GitHub OIDC +
+   Azure federated credentials로 로그인(`azd auth login --federated-credential-provider github`,
+   비밀 클라이언트 시크릿 없음) 후 `azd provision` → `azd deploy`를 실행합니다. `production`
+   GitHub Environment에 연결되어 있어 승인자가 있으면 배포 전 수동 승인을 거치고, job 단위
+   `concurrency` 그룹으로 동시 배포를 막습니다. 실패 시 `::error` 어노테이션으로 원인을 명확히
+   표시합니다. PR 이벤트에서는 절대 실행되지 않습니다.
 
-현재 워크플로에는 별도의 lint 전용 잡이나 배포(스테이징/프로덕션) 단계가 없습니다. Azure
-배포는 `docs/06-deplopy-to-azure.md` 단계에서 별도로 진행합니다.
+### 필요한 GitHub 저장소 설정 (deploy 잡용)
+
+- **Variables**(Settings → Secrets and variables → Actions → Variables):
+  `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_ENV_NAME`,
+  `AZURE_LOCATION`
+- **Secrets**: `NEIS_API_KEY` (Azure Container App의 secret으로 전달, 코드/로그에 노출 안 됨)
+- **Environment** `production`: 필요 시 필수 승인자(required reviewers)를 등록해 배포 전
+  사람이 승인하도록 구성
+- **Azure 쪽**: Entra ID 앱 등록 + federated credential(subject:
+  `repo:<owner>/<repo>:ref:refs/heads/main`, 대상: `https://token.actions.githubusercontent.com`)
+  구성 및 배포 대상 구독/리소스 그룹에 대한 역할(Contributor 등) 부여가 선행되어야 합니다.
+  `azd pipeline config` 명령으로 이 설정을 자동화할 수 있습니다.
+
+## Azure 배포 (azd + Bicep)
+
+- **인프라 정의**: `infra/main.bicep`(구독 스코프, 리소스 그룹 생성) +
+  `infra/resources.bicep`(Log Analytics, Container Apps 환경, Azure Container Registry,
+  사용자 할당 관리 ID, Storage Account/Azure Files 공유, backend/mcp/frontend 3개 Container App)
+- **서비스 정의**: 루트 `azure.yaml` — 각 서비스는 기존 `Dockerfile`을 그대로 사용하고
+  `remoteBuild: true`로 ACR Tasks에서 원격 빌드합니다(로컬에 Docker가 없어도 배포 가능).
+  frontend는 Vite가 빌드 타임에 환경변수를 번들에 굽기 때문에, backend Container App의 실제
+  URL(Bicep 출력값 `BACKEND_URI`)을 `VITE_API_BASE_URL` build arg로 주입합니다.
+- **영속성**: backend의 SQLite(`app.db`, "오늘의 왕" 캐시 포함)는 Azure Files 공유를
+  `/app/data`에 마운트해 컨테이너 재배포 후에도 보존됩니다.
+- **로컬에서 직접 배포**:
+  ```bash
+  azd auth login
+  azd env new <env-name>
+  azd env set NEIS_API_KEY <NEIS 인증키>
+  azd up   # = azd provision && azd deploy
+  ```
+- **비파괴적 검증**: 실제 리소스를 만들지 않고 Bicep이 유효한지 확인하려면
+  `az bicep build --file infra/main.bicep`(문법/타입) 또는
+  `azd provision --preview`(실제 구독 대상 what-if)를 사용하세요.
 
 ---
 

@@ -18,14 +18,30 @@ def test_meals_success(monkeypatch):
 
     monkeypatch.setattr(meals.neis_client, "get_meals", fake_get_meals)
     with TestClient(app) as client:
-        response = client.get("/api/meals", params={"schoolCode": "7010569", "officeCode": "B10", "from": "2026-08-14", "to": "2026-08-14"})
+        response = client.get(
+            "/api/meals",
+            params={
+                "schoolCode": "7010569",
+                "officeCode": "B10",
+                "from": "2026-08-14",
+                "to": "2026-08-14",
+            },
+        )
     assert response.status_code == 200
     assert response.json()["meals"][0]["menuItems"] == ["현미밥", "미역국"]
 
 
 def test_meals_invalid_date_range():
     with TestClient(app) as client:
-        response = client.get("/api/meals", params={"schoolCode": "7010569", "officeCode": "B10", "from": "2026-08-15", "to": "2026-08-14"})
+        response = client.get(
+            "/api/meals",
+            params={
+                "schoolCode": "7010569",
+                "officeCode": "B10",
+                "from": "2026-08-15",
+                "to": "2026-08-14",
+            },
+        )
     assert response.status_code == 422
 
 
@@ -35,5 +51,13 @@ def test_meals_neis_error(monkeypatch):
 
     monkeypatch.setattr(meals.neis_client, "get_meals", fake_get_meals)
     with TestClient(app) as client:
-        response = client.get("/api/meals", params={"schoolCode": "7010569", "officeCode": "B10", "from": "2026-08-14", "to": "2026-08-14"})
+        response = client.get(
+            "/api/meals",
+            params={
+                "schoolCode": "7010569",
+                "officeCode": "B10",
+                "from": "2026-08-14",
+                "to": "2026-08-14",
+            },
+        )
     assert response.status_code == 502

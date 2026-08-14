@@ -1,10 +1,11 @@
-from datetime import date
 from contextlib import asynccontextmanager
+from datetime import date
+
+from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, engine
 from app.main import app
 from app.models import TournamentRun
-from fastapi.testclient import TestClient
 
 
 @asynccontextmanager
@@ -86,7 +87,9 @@ def test_tournament_today_success():
         ],
     }
     with SessionLocal() as db:
-        db.add(TournamentRun(run_date=date.today(), champion_school_code="001", result_json=payload))
+        db.add(
+            TournamentRun(run_date=date.today(), champion_school_code="001", result_json=payload)
+        )
         db.commit()
     app.router.lifespan_context = noop_lifespan
     with TestClient(app) as client:

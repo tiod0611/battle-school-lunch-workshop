@@ -1,5 +1,5 @@
-from datetime import date
 import random
+from datetime import date
 
 from app.services import tournament_service
 
@@ -31,9 +31,19 @@ def test_draw_schools_replaces_and_shrinks(monkeypatch):
     def fake_get_meals(office_code, school_code, from_date, to_date):
         if school_code.endswith("000"):
             return []
-        return [{"DDISH_NM": "현미밥<br/>시금치국", "NTR_INFO": "탄수화물(g) 80 단백질(g) 20 지방(g) 15", "MLSV_YMD": "20260814"}]
+        return [
+            {
+                "DDISH_NM": "현미밥<br/>시금치국",
+                "NTR_INFO": "탄수화물(g) 80 단백질(g) 20 지방(g) 15",
+                "MLSV_YMD": "20260814",
+            }
+        ]
 
-    monkeypatch.setattr(tournament_service.neis_client, "search_high_schools_by_office", fake_search_high_schools_by_office)
+    monkeypatch.setattr(
+        tournament_service.neis_client,
+        "search_high_schools_by_office",
+        fake_search_high_schools_by_office,
+    )
     monkeypatch.setattr(tournament_service.neis_client, "get_meals", fake_get_meals)
 
     result = tournament_service.draw_schools_for_today(date(2026, 8, 14), random.Random(1))

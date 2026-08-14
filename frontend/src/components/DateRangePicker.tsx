@@ -1,12 +1,12 @@
 export interface DateRangeValue {
-  from: string
-  to: string
+  from: string;
+  to: string;
 }
 
 interface DateRangePickerProps {
-  value: DateRangeValue
-  error: string | null
-  onChange: (value: DateRangeValue) => void
+  value: DateRangeValue;
+  error: string | null;
+  onChange: (value: DateRangeValue) => void;
 }
 
 function DateRangePicker({ value, error, onChange }: DateRangePickerProps) {
@@ -33,7 +33,7 @@ function DateRangePicker({ value, error, onChange }: DateRangePickerProps) {
       <p className="helper-text">최대 31일까지만 조회할 수 있습니다.</p>
       {error ? <p className="error-message">{error}</p> : null}
     </section>
-  )
+  );
 }
 
-export default DateRangePicker
+export default DateRangePicker;

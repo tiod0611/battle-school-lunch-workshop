@@ -5,62 +5,71 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend:
-    name: TypeScript
+    name: Frontend (format/lint/typecheck/test/build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
-        if: ${{ hashFiles('frontend/package-lock.json') != '' }}
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
-        if: ${{ hashFiles('frontend/package-lock.json') != '' }}
         working-directory: frontend
         run: npm ci
-      - name: Build
-        if: ${{ hashFiles('frontend/package-lock.json') != '' }}
+      - name: Format check (prettier)
         working-directory: frontend
-        run: npm run build --if-present
-      - name: Test
-        if: ${{ hashFiles('frontend/package-lock.json') != '' }}
+        run: npm run format:check
+      - name: Lint (oxlint)
         working-directory: frontend
-        run: npm test --if-present
-      - name: Await frontend scaffold
-        if: ${{ hashFiles('frontend/package-lock.json') == '' }}
-        run: echo "frontend/package-lock.json is not present yet; skipping TypeScript checks."
+        run: npm run lint
+      - name: Typecheck (tsc)
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Test (vitest)
+        working-directory: frontend
+        run: npm test
+      - name: Build (vite)
+        working-directory: frontend
+        run: npm run build
 
   backend:
-    name: Python
+    name: Backend (format/lint/typecheck/test)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
-        if: ${{ hashFiles('backend/pyproject.toml') != '' }}
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
             backend/pyproject.toml
-            backend/requirements*.txt
       - name: Install dependencies
-        if: ${{ hashFiles('backend/pyproject.toml') != '' }}
         working-directory: backend
         run: python -m pip install -e ".[dev]"
-      - name: Test
-        if: ${{ hashFiles('backend/pyproject.toml') != '' }}
+      - name: Format check (ruff)
+        working-directory: backend
+        run: ruff format --check .
+      - name: Lint (ruff)
+        working-directory: backend
+        run: ruff check .
+      - name: Typecheck (mypy)
+        working-directory: backend
+        run: mypy app
+      - name: Test (pytest)
         working-directory: backend
         run: pytest
-      - name: Await backend scaffold
-        if: ${{ hashFiles('backend/pyproject.toml') == '' }}
-        run: echo "backend/pyproject.toml is not present yet; skipping Python checks."
 
   compose:
     name: Docker Compose
@@ -68,8 +77,56 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Validate Compose configuration
-        if: ${{ hashFiles('compose.yml', 'compose.yaml', 'docker-compose.yml', 'docker-compose.yaml') != '' }}
         run: docker compose config
-      - name: Await Compose scaffold
-        if: ${{ hashFiles('compose.yml', 'compose.yaml', 'docker-compose.yml', 'docker-compose.yaml') == '' }}
-        run: echo "No Compose file is present yet; skipping configuration validation."
+
+  deploy:
+    name: Deploy to Azure (azd)
+    needs: [frontend, backend, compose]
+    # CI(프론트/백엔드/compose 검증)를 통과한 뒤, main 브랜치로의 push 또는 수동 실행(workflow_dispatch)일 때만 배포한다.
+    # (pull_request 이벤트에서는 절대 실행되지 않는다.)
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    # 동시에 여러 배포가 겹쳐 실행되는 것을 방지한다 (ref와 무관하게 항상 하나만 실행).
+    concurrency:
+      group: azure-deploy-production
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install azd
+        uses: Azure/setup-azd@v2
+
+      # GitHub OIDC + Azure federated credentials로 로그인한다. 비밀 클라이언트 시크릿을 저장하지 않는다.
+      - name: Log in with Azure (Federated Credentials)
+        run: |
+          azd auth login `
+            --client-id "$Env:AZURE_CLIENT_ID" `
+            --federated-credential-provider "github" `
+            --tenant-id "$Env:AZURE_TENANT_ID"
+        shell: pwsh
+
+      - name: Provision Infrastructure
+        run: azd provision --no-prompt
+        env:
+          NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
+
+      - name: Deploy Application
+        run: azd deploy --no-prompt
+        env:
+          NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
+
+      - name: Report deployment failure
+        if: failure()
+        run: echo "::error title=Azure 배포 실패::azd provision/deploy 단계에서 오류가 발생했습니다. 위 Actions 로그와 Azure Portal의 배포 기록을 확인하세요."

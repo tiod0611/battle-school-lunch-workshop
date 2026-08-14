@@ -34,4 +34,6 @@ def search_schools(
         )
         for row in rows
     ]
-    return SchoolSearchResponse(items=items, page=page, limit=min(limit, 20), totalCount=total_count)
+    return SchoolSearchResponse(
+        items=items, page=page, limit=min(limit, 20), totalCount=total_count
+    )

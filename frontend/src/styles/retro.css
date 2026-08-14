@@ -3,7 +3,7 @@
 }
 
 :root {
-  font-family: Dotum, Gulim, 'Malgun Gothic', sans-serif;
+  font-family: Dotum, Gulim, "Malgun Gothic", sans-serif;
   color: #000000;
   background: #d6d3ce;
   line-height: 1.4;
@@ -210,8 +210,8 @@ section {
   gap: 8px;
 }
 
-input[type='text'],
-input[type='date'] {
+input[type="text"],
+input[type="date"] {
   border: 1px solid #7f9db9;
   padding: 4px 6px;
   font-size: 12px;
@@ -320,7 +320,7 @@ footer {
 }
 
 .digital {
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   background: #000000;
   color: #00ff00;
   padding: 3px 7px;

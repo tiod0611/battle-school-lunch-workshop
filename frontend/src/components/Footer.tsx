@@ -6,12 +6,12 @@ function Footer() {
       </p>
       <p className="copyright">
         Copyright ⓒ 2026 급식배틀. All Rights Reserved. 무단전재 및 재배포 금지.
-        <br />
-        본 사이트는 Internet Explorer 6.0 이상, 해상도 1024x768에 최적화되어 있습니다.
+        <br />본 사이트는 Internet Explorer 6.0 이상, 해상도 1024x768에
+        최적화되어 있습니다.
       </p>
       <p className="joke-note">(우클릭 방지 아님 · 그냥 옛날 감성입니다 ^^)</p>
     </footer>
-  )
+  );
 }
 
-export default Footer
+export default Footer;
