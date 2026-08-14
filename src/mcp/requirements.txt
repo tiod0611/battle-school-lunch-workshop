@@ -1,0 +1,9 @@
+mcp==1.9.4
+httpx
+pydantic
+pydantic-settings
+python-dotenv
+anyio
+pytest
+pytest-asyncio
+respx

@@ -6,6 +6,11 @@
 .env.*
 !.env.example
 
+# Runtime SQLite database (backend dev/prod data, must not be committed)
+backend/data/
+*.sqlite3
+*.db
+
 # Node.js
 node_modules/
 coverage/
@@ -96,3 +101,7 @@ $RECYCLE.BIN/
 .directory
 .Trash-*
 .nfs*
+
+# Bicep 컴파일 산출물 (az bicep build로 재생성 가능)
+infra/*.json
+!infra/main.parameters.json

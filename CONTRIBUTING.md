@@ -23,8 +23,11 @@
 ```sh
 cd frontend
 npm install
-npm run build
+npm run format:check
+npm run lint
+npm run typecheck
 npm test
+npm run build
 ```
 
 백엔드 설정 및 검사:
@@ -34,6 +37,9 @@ cd backend
 python -m venv .venv
 # 사용 중인 셸에서 .venv를 활성화한 후 실행합니다.
 python -m pip install -e ".[dev]"
+ruff format --check .
+ruff check .
+mypy app
 pytest
 ```
 
@@ -42,6 +48,23 @@ pytest
 ```sh
 docker compose up --build
 ```
+
+## Azure 배포 (azd)
+
+이 프로젝트는 `azd`(Azure Developer CLI)와 Bicep(`infra/`)으로 Azure Container Apps에
+배포할 수 있습니다.
+
+```sh
+azd auth login
+azd env new <env-name>
+azd env set NEIS_API_KEY <NEIS 인증키>
+azd up
+```
+
+`main` 브랜치에 push되거나 GitHub Actions에서 수동 실행(`workflow_dispatch`)하면, CI(포맷/린트/
+타입검사/테스트/빌드)를 통과한 뒤에만 GitHub OIDC + Azure federated credentials로 자동 배포됩니다
+(`.github/workflows/ci.yml`의 `deploy` 잡). 필요한 리포지토리 Variables/Secrets와 `production`
+Environment 설정은 `AGENTS.md`의 "GitHub Actions CI/CD" 절을 참고하세요.
 
 ## Pull Request 절차
 

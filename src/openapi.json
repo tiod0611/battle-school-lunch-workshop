@@ -1,0 +1,195 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "급식배틀 백엔드 API",
+    "description": "프론트엔드가 사용하는 자체 백엔드 API 명세. 백엔드는 이 명세를 근거로 학교 검색, 급식 조회, 오늘의 왕 기능을 제공한다. 백엔드-NEIS 간 통신은 data/openapi.json을 참고한다.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "http://localhost:8000", "description": "로컬 개발 서버" }
+  ],
+  "paths": {
+    "/api/schools/search": {
+      "get": {
+        "summary": "학교 이름 일부로 학교 검색",
+        "parameters": [
+          { "name": "keyword", "in": "query", "required": true, "schema": { "type": "string", "minLength": 1 }, "description": "학교명 일부 (예: '서울고')" },
+          { "name": "page", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 20, "default": 20 }, "description": "최대 20으로 고정" }
+        ],
+        "responses": {
+          "200": {
+            "description": "검색 성공 (결과가 없으면 items: [])",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SchoolSearchResponse" } } }
+          },
+          "422": {
+            "description": "keyword 누락 등 요청 값 검증 실패",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } }
+          },
+          "502": {
+            "description": "NEIS API 호출 실패(타임아웃/서버 오류) 등 백엔드 외부 연동 오류",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/meals": {
+      "get": {
+        "summary": "특정 학교의 날짜 범위 내 중식 급식 정보 조회",
+        "parameters": [
+          { "name": "schoolCode", "in": "query", "required": true, "schema": { "type": "string" }, "description": "NEIS SD_SCHUL_CODE" },
+          { "name": "officeCode", "in": "query", "required": true, "schema": { "type": "string" }, "description": "NEIS ATPT_OFCDC_SC_CODE" },
+          { "name": "from", "in": "query", "required": true, "schema": { "type": "string", "format": "date" }, "description": "조회 시작일 (YYYY-MM-DD)" },
+          { "name": "to", "in": "query", "required": true, "schema": { "type": "string", "format": "date" }, "description": "조회 종료일 (YYYY-MM-DD), from과의 차이는 최대 31일" }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공. 급식 정보가 없는 날짜는 meals 배열에서 제외되며, meals가 빈 배열이면 isEmpty=true.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MealSearchResponse" } } }
+          },
+          "422": {
+            "description": "날짜 범위 오류 (종료일 < 시작일, 또는 31일 초과) 등 요청 값 검증 실패",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } }
+          },
+          "502": {
+            "description": "NEIS API 호출 실패(타임아웃/서버 오류) 등 백엔드 외부 연동 오류",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/tournament/today": {
+      "get": {
+        "summary": "오늘의 왕 토너먼트 결과 조회",
+        "responses": {
+          "200": {
+            "description": "오늘의 토너먼트 결과 (우승 학교, 채점 근거, 전체 대진표)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TodayKingResponse" } } }
+          },
+          "404": {
+            "description": "아직 오늘 배치가 실행되지 않아 결과가 없음",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SchoolSummary": {
+        "type": "object",
+        "properties": {
+          "schoolCode": { "type": "string", "description": "NEIS SD_SCHUL_CODE" },
+          "officeCode": { "type": "string", "description": "NEIS ATPT_OFCDC_SC_CODE" },
+          "officeName": { "type": "string", "description": "시도교육청명" },
+          "schoolName": { "type": "string" },
+          "schoolKind": { "type": "string", "description": "학교급 (초등학교/중학교/고등학교 등)" },
+          "region": { "type": "string", "description": "소재지 (시도)" },
+          "foundationType": { "type": "string", "description": "설립형태 (공립/사립/국립)" }
+        },
+        "required": ["schoolCode", "officeCode", "officeName", "schoolName", "schoolKind"]
+      },
+      "SchoolSearchResponse": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/SchoolSummary" } },
+          "page": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "totalCount": { "type": "integer" }
+        },
+        "required": ["items", "page", "limit", "totalCount"]
+      },
+      "MealItem": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "dayOfWeek": { "type": "string", "description": "월/화/수/목/금/토/일" },
+          "menuItems": { "type": "array", "items": { "type": "string" }, "description": "DDISH_NM을 <br/> 기준으로 분리한 메뉴 목록" },
+          "calorie": { "type": "string", "description": "CAL_INFO 원문 (예: '820 Kcal')" },
+          "nutritionInfo": { "type": "string", "description": "NTR_INFO 원문" }
+        },
+        "required": ["date", "dayOfWeek", "menuItems"]
+      },
+      "MealSearchResponse": {
+        "type": "object",
+        "properties": {
+          "schoolCode": { "type": "string" },
+          "officeCode": { "type": "string" },
+          "schoolName": { "type": "string" },
+          "meals": { "type": "array", "items": { "$ref": "#/components/schemas/MealItem" } },
+          "isEmpty": { "type": "boolean", "description": "meals가 빈 배열이면 true" }
+        },
+        "required": ["schoolCode", "officeCode", "schoolName", "meals", "isEmpty"]
+      },
+      "ScoreBreakdown": {
+        "type": "object",
+        "description": "docs/SCORING_ALGORITHM.md 기준 채점 상세",
+        "properties": {
+          "base": { "type": "integer", "description": "기본 점수 (20점 고정)" },
+          "seasonalIngredient": { "type": "integer", "description": "제철 재료 반영도 (0~25점)" },
+          "nutritionBalance": { "type": "integer", "description": "탄단지 비율 적정성 (0~30점)" },
+          "menuVariety": { "type": "integer", "description": "반찬 수 (0~25점)" },
+          "processedFoodPenalty": { "type": "integer", "description": "인스턴트/가공식품 감점 (0~-20점, 음수)" },
+          "total": { "type": "integer", "description": "총점 (0~100 clamp)" }
+        },
+        "required": ["base", "seasonalIngredient", "nutritionBalance", "menuVariety", "processedFoodPenalty", "total"]
+      },
+      "TournamentSchool": {
+        "type": "object",
+        "properties": {
+          "schoolCode": { "type": "string" },
+          "schoolName": { "type": "string" },
+          "officeName": { "type": "string" },
+          "menuItems": { "type": "array", "items": { "type": "string" } },
+          "score": { "$ref": "#/components/schemas/ScoreBreakdown" }
+        },
+        "required": ["schoolCode", "schoolName", "officeName", "menuItems", "score"]
+      },
+      "TournamentMatch": {
+        "type": "object",
+        "properties": {
+          "matchId": { "type": "string" },
+          "schoolA": { "$ref": "#/components/schemas/TournamentSchool" },
+          "schoolB": { "type": ["object", "null"], "allOf": [{ "$ref": "#/components/schemas/TournamentSchool" }], "description": "부전승인 경우 null" },
+          "winnerSchoolCode": { "type": "string" },
+          "isBye": { "type": "boolean", "description": "상대 결측으로 인한 부전승 여부" }
+        },
+        "required": ["matchId", "schoolA", "winnerSchoolCode", "isBye"]
+      },
+      "TournamentRound": {
+        "type": "object",
+        "properties": {
+          "roundNumber": { "type": "integer", "description": "1(128강)~7(결승)" },
+          "roundName": { "type": "string", "description": "예: '128강', '64강', ..., '결승'" },
+          "matches": { "type": "array", "items": { "$ref": "#/components/schemas/TournamentMatch" } }
+        },
+        "required": ["roundNumber", "roundName", "matches"]
+      },
+      "TodayKingResponse": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "totalParticipants": { "type": "integer", "description": "결측으로 축소되었을 수 있어 128보다 작을 수 있음" },
+          "champion": { "$ref": "#/components/schemas/TournamentSchool" },
+          "bracket": { "type": "array", "items": { "$ref": "#/components/schemas/TournamentRound" } }
+        },
+        "required": ["date", "totalParticipants", "champion", "bracket"]
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "properties": {
+          "detail": { "type": "string", "description": "사용자에게 표시할 오류 메시지 (예: '날짜 범위는 최대 31일까지 조회할 수 있습니다.')" }
+        },
+        "required": ["detail"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "detail": { "type": "string", "description": "사용자에게 표시할 오류 메시지" },
+          "code": { "type": "string", "description": "내부 오류 코드 (예: 'NEIS_TIMEOUT', 'NEIS_UPSTREAM_ERROR', 'TOURNAMENT_NOT_READY')" }
+        },
+        "required": ["detail"]
+      }
+    }
+  }
+}

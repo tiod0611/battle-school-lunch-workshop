@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>급식배틀 - 전국 학교 급식 정보 조회 시스템</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Dotum', 'Gulim', 'Malgun Gothic', sans-serif;
+    background: #D6D3CE;
+    color: #000000;
+    font-size: 13px;
+  }
+
+  /* 상단 유틸리티 바 */
+  .util-bar {
+    background: #ECE9D8;
+    border-bottom: 1px solid #ACA899;
+    padding: 4px 12px;
+    font-size: 11px;
+    text-align: right;
+    color: #333;
+  }
+  .util-bar a { color: #0000EE; text-decoration: underline; cursor: pointer; margin: 0 2px; }
+
+  /* 헤더 */
+  .main-header {
+    background: #003366;
+    color: #FFFFFF;
+    text-align: center;
+    padding: 16px 0 12px;
+    border-bottom: 4px solid #FFCC00;
+  }
+  .main-header h1 {
+    margin: 0;
+    font-size: 28px;
+    letter-spacing: 6px;
+  }
+  .main-header .subtitle {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: #CCE0FF;
+  }
+
+  /* 스크롤 공지 */
+  .notice-marquee {
+    background: #FFFFCC;
+    border-top: 1px solid #999;
+    border-bottom: 1px solid #999;
+    color: #CC0000;
+    font-weight: bold;
+    padding: 5px 0;
+    font-size: 13px;
+  }
+
+  section {
+    max-width: 800px;
+    margin: 16px auto;
+    background: #FFFFFF;
+    border: 1px solid #ACA899;
+  }
+
+  /* 오늘의 왕 */
+  .today-king-box {
+    border: 3px dashed #CC0000;
+    background: #FFFDE7;
+    text-align: center;
+    padding: 18px;
+    margin: 16px auto;
+    max-width: 800px;
+  }
+  .king-badge {
+    display: inline-block;
+    background: #FFD700;
+    border: 2px solid #B8860B;
+    padding: 4px 18px;
+    font-weight: bold;
+    font-size: 15px;
+    margin-bottom: 10px;
+  }
+  .today-king-box h2 {
+    margin: 6px 0;
+    color: #003366;
+    font-size: 24px;
+  }
+  .king-menu { font-size: 14px; color: #333; margin: 6px 0; }
+  .king-score { color: #CC0000; font-weight: bold; margin: 4px 0; }
+  .king-comment { font-size: 12px; color: #666; font-style: italic; margin-top: 8px; }
+  .bracket-note { font-size: 11px; color: #888; margin-top: 10px; }
+
+  .search-box, .result-box {
+    padding: 14px 18px;
+  }
+  .search-box h3, .result-box h3 {
+    background: #003366;
+    color: #fff;
+    margin: -14px -18px 14px;
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+  .search-box label { display: inline-block; margin-right: 14px; font-size: 12px; }
+  input[type=text], input[type=date] {
+    border: 1px solid #7F9DB9;
+    padding: 4px 6px;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  button {
+    background: #ECE9D8;
+    border: 2px outset #ECE9D8;
+    padding: 5px 16px;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  button:active { border-style: inset; }
+
+  .retro-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .retro-table th {
+    background: #003366;
+    color: #fff;
+    border: 1px solid #001a33;
+    padding: 7px;
+  }
+  .retro-table td {
+    border: 1px solid #ACA899;
+    padding: 7px;
+    text-align: center;
+  }
+  .retro-table tr:nth-child(even) td { background: #F0EFEA; }
+
+  footer {
+    text-align: center;
+    padding: 18px 0 34px;
+    font-size: 11px;
+    color: #555;
+  }
+  .hit-counter .digital {
+    font-family: 'Courier New', monospace;
+    background: #000;
+    color: #00FF00;
+    padding: 3px 7px;
+    letter-spacing: 3px;
+  }
+  .copyright { margin-top: 10px; line-height: 1.7; color: #777; }
+  .joke-note { color: #999; font-size: 10px; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+  <div class="util-bar">
+    즐겨찾기 추가 | 글자크기 <a>가</a> <a>가</a> <a>가</a> | 현재 접속자: 1,024명
+  </div>
+
+  <header class="main-header">
+    <h1>🍚 급 식 배 틀 🍚</h1>
+    <p class="subtitle">전국 학교 급식 정보 조회 시스템</p>
+  </header>
+
+  <marquee class="notice-marquee">🔔 공지: 매일 정오, 전국 고등학교 128개교가 급식으로 목숨을 건 배틀을 벌칩니다! 오늘의 왕은 누구?! 🔔</marquee>
+
+  <section class="today-king-box">
+    <div class="king-badge">👑 오늘의 급식왕 👑</div>
+    <h2>서울OO고등학교</h2>
+    <p class="king-menu">현미밥 · 된장찌개 · 제육볶음 · 봄동나물무침 · 배추김치</p>
+    <p class="king-score">건강점수 <b>92점</b> (전국 128개교 중 1위)</p>
+    <p class="king-comment">"이 학교 급식... 국가대표급이네요 😳" — 배틀 심사 알고리즘 코멘트</p>
+    <p class="bracket-note">▶ 128강 토너먼트 대진표 전체 보기</p>
+  </section>
+
+  <section class="search-box">
+    <h3>▶ 우리 학교 급식 검색하기</h3>
+    <form onsubmit="return false;">
+      <label>학교명: <input type="text" placeholder="예: 서울고등학교"></label>
+      <label>기간: <input type="date" value="2026-08-01"> ~ <input type="date" value="2026-08-14"></label>
+      <button type="button">검 색</button>
+    </form>
+  </section>
+
+  <section class="result-box">
+    <h3>▶ 검색 결과 (최대 31일)</h3>
+    <table class="retro-table">
+      <thead><tr><th>날짜</th><th>요일</th><th>중식 메뉴</th><th>칼로리</th></tr></thead>
+      <tbody>
+        <tr><td>2026-08-14</td><td>금</td><td>흑미밥, 미역국, 돈까스, 양배추샐러드, 깍두기</td><td>820kcal</td></tr>
+        <tr><td>2026-08-13</td><td>목</td><td>보리밥, 김치찌개, 고등어구이, 콩나물무침, 배추김치</td><td>745kcal</td></tr>
+        <tr><td>2026-08-12</td><td>수</td><td>잡곡밥, 육개장, 계란말이, 어묵볶음, 총각김치</td><td>790kcal</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p class="hit-counter">TOTAL VISITOR : <span class="digital">0 0 1 2 3 4</span></p>
+    <p class="copyright">
+      Copyright ⓒ 2026 급식배틀. All Rights Reserved. 무단전재 및 재배포 금지.<br>
+      본 사이트는 Internet Explorer 6.0 이상, 해상도 1024x768에 최적화되어 있습니다.
+    </p>
+    <p class="joke-note">(우클릭 방지 아님 · 그냥 옛날 감성입니다 ^^)</p>
+  </footer>
+
+</body>
+</html>
