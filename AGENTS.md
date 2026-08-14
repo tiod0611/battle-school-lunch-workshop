@@ -4,11 +4,46 @@
 
 ## 프로젝트 개요
 
-이 프로젝트는 학교 급식 관리 시스템의 통합 플랫폼입니다:
-- **오픈API 명세서**: `data/` 디렉토리의 엑셀 파일로 제공되는 학교 기본정보, 급식 식단 정보 API
-- **백엔드**: Python 기반 API 서버 (MCP 서버, 멀티에이전트 앱)
-- **배포**: GitHub Actions를 활용한 CI/CD 파이프라인
-- **목표**: 완성된 서비스 배포까지 진행
+"급식배틀"은 NEIS(교육정보 공시) 공개 API를 활용해 학교 급식 메뉴를 조회하고,
+두 학교의 급식을 비교하는 "오늘의 왕" 기능을 제공하는 학교 급식 조회 웹 앱입니다.
+
+- **오픈API 명세서**: `data/`의 엑셀 파일(학교 기본정보, 급식 식단 정보)과 이를 변환한
+  `data/openapi.json` — NEIS API의 실제 계약(엔드포인트, 파라미터, 코드값)
+- **백엔드**(`backend/`): FastAPI 기반 API 서버. NEIS API를 호출해 학교 검색/급식 조회를
+  제공하고, "오늘의 왕" 결과는 SQLite(`backend/data/app.db`)에 저장해 하루 한 번만 재계산
+- **프론트엔드**(`frontend/`): React + TypeScript + Vite. 백엔드 API만 호출하며 NEIS를
+  직접 호출하지 않음
+- **MCP 서버**(`src/mcp/`): 학교 검색/급식 조회 도구를 제공하는 독립 실행형 Model Context
+  Protocol 서버 (Streamable HTTP, backend 비의존)
+- **배포**: GitHub Actions CI(`.github/workflows/ci.yml`), Docker Compose로 3개 서비스
+  (backend:8000, mcp:8100, frontend:3000) 동시 실행
+
+### 저장소 구조
+
+```
+data/                    # NEIS API 명세 원본 (엑셀 2종 + 생성된 openapi.json)
+src/
+  openapi.json            # 생성 파일: 백엔드 자체 API(프론트-백엔드 계약) 스냅샷
+  mcp/                    # MCP 서버 (Python, FastMCP, Streamable HTTP)
+    app/                  # config, errors, neis_client, formatting, validators, server
+    tests/                # 단위(test_neis_client.py) + 통합(test_server.py) 테스트
+backend/                 # FastAPI 백엔드
+  app/
+    main.py, config.py, database.py, models.py, schemas.py
+    neis_client.py, scheduler.py
+    routers/              # schools.py, meals.py, tournament.py
+    services/             # scoring.py, tournament_service.py
+  tests/                  # 라우터/서비스별 단위·통합 테스트
+  data/                   # app.db (SQLite, 실행 시 생성 — 커밋/삭제 금지)
+frontend/                 # React + TypeScript + Vite
+  src/
+    App.tsx, App.test.tsx # 루트 컴포넌트 + MSW 기반 통합 테스트
+    api/client.ts          # 백엔드 API 호출 전용 (NEIS 직접 호출 금지)
+    components/            # SchoolSearch, DateRangePicker, MealResults, TodayKing 등
+    test/setup.ts           # vitest + MSW 셋업
+scripts/                  # run-dev.ps1/.sh, convert_excel*.py/.ps1, generate_openapi.ps1
+docker-compose.yml        # backend + mcp + frontend
+```
 
 ## 일반 작업 지침
 
@@ -24,6 +59,140 @@
 - `data/` 디렉토리의 엑셀 파일들을 참고하여 API 명세를 이해합니다.
 - README.md, PRD.md, TRD.md 등 기존 문서를 우선 확인합니다.
 - 새로운 문서나 가이드는 프로젝트 구조와 일관되게 작성합니다.
+- **`data/openapi.json` vs `src/openapi.json`을 혼동하지 않습니다**:
+  - `data/openapi.json`은 **NEIS 외부 API** 계약(엔드포인트, 파라미터, 코드값)입니다.
+    `data/*.xlsx`에서 `scripts/convert_excel_to_openapi.ps1`(또는 `convert_excel.py`)로
+    생성되므로, NEIS 스펙이 바뀌면 엑셀→스크립트 재실행 순으로 갱신하고 직접 손으로
+    수정하지 않습니다.
+  - `src/openapi.json`은 **이 프로젝트 자체 백엔드 API**(프론트-백엔드 계약) 스냅샷입니다.
+    백엔드 라우터가 실제 계약의 출처이므로, 라우터를 바꾼 뒤 이 파일도 맞춰 갱신하되
+    직접 손으로 편집하기보다는 실제 스키마와 일치하도록 갱신 여부를 확인합니다.
+
+---
+
+## 실제 사용 기술 스택
+
+### 프론트엔드 (`frontend/`)
+
+- **프레임워크**: React 19 + TypeScript(strict) 5, **Vite 8** (빌드/개발 서버)
+- **패키지 매니저**: npm (`package-lock.json` 커밋)
+- **테스트**: Vitest 4 + Testing Library + **MSW**(백엔드 API 목킹, 실네트워크 호출 없음)
+- **린트**: **oxlint** (Rust 기반 고속 린터, eslint 아님)
+- **타입 검사**: `tsc` (빌드 스크립트 `tsc -b`에 포함, 별도 포맷터는 미도입)
+- **런타임**: Node.js 18+ (CI는 Node 24)
+
+### 백엔드 (`backend/`)
+
+- **프레임워크**: FastAPI + uvicorn, SQLAlchemy(SQLite) + APScheduler(오늘의 왕 일 1회 계산)
+- **패키지 매니저**: pip + `requirements.txt` (⚠️ `pyproject.toml`이 아닙니다 — 아래 참고)
+- **HTTP 클라이언트**: httpx (NEIS 호출), 테스트는 respx로 목킹
+- **테스트**: pytest + pytest-asyncio
+- **런타임**: Python 3.12 (CI 기준)
+
+### MCP 서버 (`src/mcp/`)
+
+- **프레임워크**: `mcp`(FastMCP) **1.9.4** 고정 — 최신 2.x는 `cryptography`(Rust 빌드) 의존성이
+  추가되어 환경에 따라 빌드가 실패할 수 있어 의도적으로 1.9.4를 사용합니다. 업그레이드 시
+  반드시 로컬에서 `pip install`과 테스트가 통과하는지 먼저 확인하세요.
+- **전송 방식**: Streamable HTTP (`streamable_http_path="/mcp"`), backend와 완전히 독립 실행
+- **기타**: httpx, pydantic-settings, 테스트는 pytest + respx
+
+### ⚠️ CONTRIBUTING.md / CI와의 알려진 불일치
+
+`CONTRIBUTING.md`와 `.github/workflows/ci.yml`은 `backend/pyproject.toml`이 존재하고
+`pip install -e ".[dev]"`로 설치한다고 가정하지만, 실제 `backend/`와 `src/mcp/`는
+`requirements.txt`만 사용합니다. 그 결과 CI의 backend 잡은 `pyproject.toml` 부재 조건으로
+**현재 실질적으로 스킵**되고 있고, `src/mcp/`는 CI에 아예 잡이 없습니다. 이 문서의 명령은
+실제로 동작하는 `requirements.txt` 기준으로 작성했으니 이 명령을 따르세요. CI/CONTRIBUTING.md
+정합화는 별도 이슈로 다루는 것을 권장합니다.
+
+## 검증된 명령
+
+### 프론트엔드
+
+```bash
+cd frontend
+npm install
+npm run dev          # 로컬 개발 서버 (:3000)
+npm run build         # tsc -b && vite build (타입 검사 포함)
+npm test              # vitest run
+npm run lint           # oxlint
+```
+
+### 백엔드
+
+```bash
+cd backend
+python -m venv .venv   # 활성화 후 진행
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8000   # 로컬 개발 서버
+pytest                                                   # 단위 + 통합 테스트
+```
+
+### MCP 서버
+
+```bash
+cd src/mcp
+pip install -r requirements.txt
+python -m app.server    # 로컬 개발 서버 (:8100, Streamable HTTP)
+pytest
+```
+
+### 한 번에 로컬 실행 (backend + frontend)
+
+```powershell
+./scripts/run-dev.ps1   # Windows, 각각 새 PowerShell 창에서 기동
+```
+```bash
+./scripts/run-dev.sh    # bash
+```
+
+사전에 루트 `.env.example`을 `.env`로 복사하고 `NEIS_API_KEY`를 채워야 합니다.
+
+### Docker Compose
+
+```bash
+docker compose up --build     # backend(8000) + mcp(8100) + frontend(3000) 동시 기동
+docker compose config          # 문법 검증만 (CI의 compose 잡이 사용, 실제 빌드 아님)
+```
+
+## 테스트 위치와 원칙
+
+- **프론트엔드 통합 테스트**: `frontend/src/**/*.test.tsx` (예: `App.test.tsx`). MSW로 백엔드
+  API를 목킹해 실제 네트워크 없이 사용자 흐름(학교 검색 → 선택 → 기간 지정 → 급식 조회)을
+  검증합니다. `npm test`로 실행합니다.
+- **백엔드 단위·통합 테스트**: `backend/tests/*.py`. FastAPI `TestClient` + respx(NEIS 호출
+  목킹)로 라우터별 동작(`test_schools_router.py`, `test_meals_router.py`), 점수 계산
+  (`test_scoring.py`), 오늘의 왕 캐싱·스케줄러(`test_tournament_router.py`,
+  `test_tournament_service.py`)를 검증합니다. `pytest`로 실행합니다.
+- **MCP 서버 테스트**: `src/mcp/tests/*.py`. `test_neis_client.py`(단위, respx),
+  `test_server.py`(통합, `FastMCP.call_tool()` 직접 호출로 도구 검증). `pytest`로 실행합니다.
+- **E2E 관련 유의사항**: 이 프로젝트의 "E2E 검증"은 실제로는 프론트엔드 통합 테스트(MSW
+  목킹) + 개발 중 브라우저를 통한 수동 크로스서비스 확인 수준입니다. backend·frontend·mcp를
+  모두 실제로 띄워 자동으로 검증하는 크로스서비스 E2E 스위트는 아직 없습니다.
+- **원칙**: 새 기능/버그 수정 시 반드시 대응하는 테스트를 함께 추가합니다. 외부 API(NEIS)
+  호출은 실제 네트워크 대신 respx(Python)/MSW(TypeScript)로 목킹해 결정론적으로 테스트합니다.
+
+## 프로젝트 고유 가드레일
+
+- **NEIS API 직접 호출 금지**: 프론트엔드는 NEIS Open API를 절대 직접 호출하지 않습니다.
+  반드시 백엔드(`/api/...`) 또는 MCP 서버를 통해서만 데이터를 가져오며, 호출 주소는
+  `frontend/src/api/client.ts`의 `API_BASE_URL` 하나로 관리합니다.
+- **`data/openapi.json` 계약 준수**: NEIS를 호출하는 모든 코드(`neis_client.py`, backend·mcp
+  양쪽)는 `data/openapi.json`에 정의된 엔드포인트·파라미터·코드값(예: `MMEAL_SC_CODE`
+  `2`=중식)을 따릅니다.
+- **생성 파일 직접 수정 금지**: `data/openapi.json`, `src/openapi.json`은 각각 스크립트/구현
+  스냅샷으로 생성되는 파일입니다. 스펙이 바뀌면 원본(엑셀, 백엔드 라우터)을 수정한 뒤
+  재생성하고, 생성된 JSON 자체를 손으로 편집하지 않습니다.
+- **비밀 정보 관리**: `NEIS_API_KEY` 등은 각 컴포넌트의 `.env`(루트/`backend/`/`src/mcp/`
+  `.env.example` 참고)로만 관리하며 커밋하지 않습니다(`.gitignore`에 포함). GitHub Actions에서
+  필요하면 리포지토리 Secrets를 사용합니다.
+- **DB/캐시 파일 보존**: "오늘의 왕" 결과는 `backend/data/app.db`(SQLite)에 저장되어 하루
+  한 번(스케줄러, 기본 00:10, `TOURNAMENT_RUN_HOUR`/`TOURNAMENT_RUN_MINUTE`)만 재계산됩니다.
+  로컬 검증 중 이 파일을 임의로 삭제하지 않습니다.
+- **서버 프로세스 관리**: 로컬에서 백엔드/프론트엔드/MCP 서버를 장시간 띄워둘 때는 세션·터미널
+  종료로 죽지 않도록 완전히 분리된 프로세스로 실행하고, `python`/`npm` 실행 전 PATH가 제대로
+  설정되어 있는지 확인합니다.
 
 ---
 
@@ -130,8 +299,10 @@
   ```json
   {
     "dependencies": {
-      "axios": "^1.6.0",
-      "pydantic-ts": "^2.0.0"
+      "react": "^19.2.8"
+    },
+    "devDependencies": {
+      "msw": "^2.15.0"
     }
   }
   ```
@@ -140,70 +311,18 @@
 
 ## 검증 원칙
 
-### 테스트
+> 실제로 동작하는 명령은 위 [검증된 명령](#검증된-명령), 테스트 위치는
+> [테스트 위치와 원칙](#테스트-위치와-원칙)을 참고하세요. 이 섹션은 일반 원칙만 다룹니다.
 
-- **테스트 프레임워크**: Python은 `pytest`, TypeScript는 `jest` 사용
-- **테스트 작성**: 모든 API 엔드포인트와 핵심 로직에 단위 테스트 작성
-  ```bash
-  # Python 테스트 실행
-  pytest tests/ -v --cov=src
-  
-  # TypeScript 테스트 실행
-  npm test
-  ```
-- **최소 커버리지**: 80% 이상의 코드 커버리지 목표
-
-### 포맷팅
-
-- **Python**: `black` 사용
-  ```bash
-  black src/ --line-length=100
-  ```
-- **TypeScript/JavaScript**: `prettier` 사용
-  ```bash
-  prettier --write src/
-  ```
-
-### 린트
-
-- **Python**: `pylint` 또는 `ruff` 사용
-  ```bash
-  pylint src/
-  # 또는
-  ruff check src/
-  ```
-- **TypeScript**: `eslint` 사용
-  ```bash
-  eslint src/ --fix
-  ```
-
-### 타입 검사
-
-- **Python**: `mypy` 사용
-  ```bash
-  mypy src/
-  ```
-- **TypeScript**: `tsc` 사용
-  ```bash
-  tsc --noEmit
-  ```
-
-### 빌드 및 검증 스크립트
-
-모든 검증은 다음 순서로 진행합니다:
-```bash
-# Python 프로젝트
-python -m pytest tests/
-python -m mypy src/
-python -m pylint src/
-python -m black --check src/
-
-# TypeScript 프로젝트
-npm test
-npm run lint
-npm run type-check
-npm run build
-```
+- **작업 전 확인**: 코드를 바꾸기 전에 해당 컴포넌트(frontend/backend/src/mcp)의 테스트를
+  먼저 실행해 현재 상태를 파악합니다.
+- **테스트 작성**: 새 기능이나 버그 수정에는 반드시 대응하는 테스트를 함께 추가합니다.
+- **포맷팅/린트/타입 검사 도구가 없는 영역**: 현재 `backend/`, `src/mcp/`에는 black·ruff·mypy
+  같은 전용 포맷터/린터/타입 체커가 도입되어 있지 않습니다. 이 영역은 타입 힌트 작성 규칙
+  (아래 Python 코딩 가이드라인)과 Pydantic 런타임 검증, 코드 리뷰로 대신합니다. 새로 도구를
+  추가하려면 먼저 사용자와 상의하세요(불필요한 의존성 추가 금지 원칙).
+- **작업 후 확인**: 변경한 컴포넌트의 검증된 명령(테스트, 빌드/lint)을 실행해 회귀가 없는지
+  확인한 뒤 커밋합니다.
 
 ---
 
@@ -283,7 +402,10 @@ npm run build
 
 ---
 
-## 주의사항 및 가드레일
+## 일반 가드레일
+
+> 프로젝트 고유 가드레일(NEIS 직접 호출 금지 등)은 위 [프로젝트 고유
+> 가드레일](#프로젝트-고유-가드레일) 섹션을 참고하세요.
 
 ### 코드 리뷰
 
@@ -297,7 +419,7 @@ npm run build
 
 ### 호환성
 
-- **버전 호환성**: Python 3.9+, Node.js 18+ 지원
+- **버전 호환성**: Python 3.12(CI 기준), Node.js 18+ 지원(CI는 Node 24)
 - **크로스 플랫폼**: Windows, macOS, Linux에서 동작하도록 개발
 
 ### 의존성 변경
@@ -414,19 +536,21 @@ Closes #5, #6
 
 ## GitHub Actions CI/CD
 
-### 자동 실행되는 체크
+### 실제 워크플로 (`.github/workflows/ci.yml`)
 
-다음 작업들이 모든 PR과 커밋에서 자동으로 실행됩니다:
+`main`으로의 push와 PR마다 3개 잡이 실행됩니다:
 
-1. **테스트**: pytest 또는 jest로 테스트 스위트 실행
-2. **린트**: pylint/ruff 또는 eslint로 코드 스타일 확인
-3. **타입 검사**: mypy 또는 tsc로 타입 안전성 확인
-4. **빌드**: 컨테이너 이미지 또는 배포 아티팩트 빌드
+1. **frontend** (`frontend/package-lock.json`이 있을 때만): `npm ci` → `npm run build`
+   (tsc 타입 검사 포함) → `npm test`
+2. **backend** (`backend/pyproject.toml`이 있을 때만): `pip install -e ".[dev]"` → `pytest`
+   — ⚠️ 현재 `backend/`는 `pyproject.toml`이 아니라 `requirements.txt`를 사용하므로 이
+   조건이 거짓이 되어 **이 잡은 사실상 스킵됩니다**. `src/mcp/`용 CI 잡은 아직 없습니다.
+   CI에서 backend·mcp 테스트를 실제로 돌리려면 워크플로 정합화가 필요합니다(별도 이슈 권장).
+3. **compose** (compose 파일이 있을 때만): `docker compose config`로 **문법만** 검증하며
+   실제 이미지 빌드는 하지 않습니다.
 
-### 배포 파이프라인
-
-- `main` 브랜치에 병합되면 자동으로 스테이징 환경에 배포
-- 태그 생성 시 프로덕션 환경에 배포
+현재 워크플로에는 별도의 lint 전용 잡이나 배포(스테이징/프로덕션) 단계가 없습니다. Azure
+배포는 `docs/06-deplopy-to-azure.md` 단계에서 별도로 진행합니다.
 
 ---
 
