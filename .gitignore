@@ -6,6 +6,11 @@
 .env.*
 !.env.example
 
+# Runtime SQLite database (backend dev/prod data, must not be committed)
+backend/data/
+*.sqlite3
+*.db
+
 # Node.js
 node_modules/
 coverage/
